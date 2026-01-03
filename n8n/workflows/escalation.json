@@ -1,0 +1,203 @@
+{
+  "name": "Timeout Escalation Check",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Schedule: Hourly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "select",
+        "table": "workflow_state",
+        "where": {
+          "values": [
+            {
+              "column": "status",
+              "value": "in_progress"
+            },
+            {
+              "column": "timeout_at",
+              "operator": "lt",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "find-timed-out",
+      "name": "Find Timed Out Workflows",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-results",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-results",
+      "name": "Has Timed Out Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "={{ $json }}",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "=:rotating_light: *Workflow Timeout*\n\n*Issue:* #{{ $json.issue_number }} - {{ $json.issue_title }}\n*Repository:* {{ $json.repository }}\n*Started:* {{ $json.started_at }}\n*Status:* {{ $json.status }}\n*Iterations:* {{ $json.iteration_count }}\n\nThis workflow has exceeded the {{ $env.TIMEOUT_HOURS || 24 }} hour timeout.\nPlease review and take manual action."
+      },
+      "id": "notify-timeout",
+      "name": "Notify: Timeout",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [880, -100],
+      "notes": "Configure with your Slack webhook or replace with email/other notification"
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "update",
+        "table": "workflow_state",
+        "data": {
+          "values": [
+            {
+              "status": "timed_out",
+              "timed_out_at": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "id": "update-timed-out",
+      "name": "Update State: Timed Out",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1100, -100]
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No Timeouts Found",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 100]
+    }
+  ],
+  "connections": {
+    "Schedule: Hourly Check": {
+      "main": [
+        [
+          {
+            "node": "Find Timed Out Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Timed Out Workflows": {
+      "main": [
+        [
+          {
+            "node": "Has Timed Out Items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Timed Out Items?": {
+      "main": [
+        [
+          {
+            "node": "Split Into Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Timeouts Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Items": {
+      "main": [
+        [
+          {
+            "node": "Notify: Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify: Timeout": {
+      "main": [
+        [
+          {
+            "node": "Update State: Timed Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["multi-agent", "escalation"]
+}

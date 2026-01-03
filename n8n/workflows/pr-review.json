@@ -1,0 +1,246 @@
+{
+  "name": "PR Review - Trigger Reviewer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pr-opened",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-pr",
+      "name": "Webhook: PR Opened",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "select",
+        "table": "workflow_state",
+        "where": {
+          "values": [
+            {
+              "column": "pr_number",
+              "value": "={{ $json.pull_request.number }}"
+            }
+          ]
+        }
+      },
+      "id": "get-state",
+      "name": "Get Workflow State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-iterations",
+              "leftValue": "={{ $json.iteration_count }}",
+              "rightValue": "={{ $env.MAX_ITERATIONS || 5 }}",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-limits",
+      "name": "Check Iteration Limits",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e GITHUB_TOKEN=\"$REVIEWER_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: PR Opened').item.json.repository.clone_url }}\" \\\n  -e PR_NUMBER=\"{{ $('Webhook: PR Opened').item.json.pull_request.number }}\" \\\n  -e PR_TITLE=\"{{ $('Webhook: PR Opened').item.json.pull_request.title }}\" \\\n  -e PR_BODY=\"{{ $('Webhook: PR Opened').item.json.pull_request.body }}\" \\\n  -e PR_BRANCH=\"{{ $('Webhook: PR Opened').item.json.pull_request.head.ref }}\" \\\n  -e ITERATION_COUNT=\"{{ $('Get Workflow State').item.json.iteration_count + 1 }}\" \\\n  -e MAX_ITERATIONS=\"{{ $env.MAX_ITERATIONS || 5 }}\" \\\n  -v reviewer_workspace:/workspace \\\n  multiagentworkflow-reviewer-agent"
+      },
+      "id": "run-reviewer",
+      "name": "Run Reviewer Agent",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "update",
+        "table": "workflow_state",
+        "data": {
+          "values": [
+            {
+              "iteration_count": "={{ $('Get Workflow State').item.json.iteration_count + 1 }}",
+              "last_review_at": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "where": {
+          "values": [
+            {
+              "column": "pr_number",
+              "value": "={{ $('Webhook: PR Opened').item.json.pull_request.number }}"
+            }
+          ]
+        }
+      },
+      "id": "update-iteration",
+      "name": "Update Iteration Count",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [880, -100]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "=:warning: *PR Review Escalation*\n\nPR #{{ $('Webhook: PR Opened').item.json.pull_request.number }} has exceeded the maximum review iterations ({{ $env.MAX_ITERATIONS || 5 }}).\n\n*Repository:* {{ $('Webhook: PR Opened').item.json.repository.full_name }}\n*PR:* {{ $('Webhook: PR Opened').item.json.pull_request.html_url }}\n\nPlease review manually."
+      },
+      "id": "escalate",
+      "name": "Escalate to Human",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [660, 100],
+      "notes": "Configure with your Slack webhook or replace with email/other notification"
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "update",
+        "table": "workflow_state",
+        "data": {
+          "values": [
+            {
+              "status": "escalated",
+              "escalated_at": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "where": {
+          "values": [
+            {
+              "column": "pr_number",
+              "value": "={{ $('Webhook: PR Opened').item.json.pull_request.number }}"
+            }
+          ]
+        }
+      },
+      "id": "update-escalated",
+      "name": "Update State: Escalated",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [880, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, pr: $('Webhook: PR Opened').item.json.pull_request.number }) }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1100, 0]
+    }
+  ],
+  "connections": {
+    "Webhook: PR Opened": {
+      "main": [
+        [
+          {
+            "node": "Get Workflow State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workflow State": {
+      "main": [
+        [
+          {
+            "node": "Check Iteration Limits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Iteration Limits": {
+      "main": [
+        [
+          {
+            "node": "Run Reviewer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate to Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Reviewer Agent": {
+      "main": [
+        [
+          {
+            "node": "Update Iteration Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Iteration Count": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to Human": {
+      "main": [
+        [
+          {
+            "node": "Update State: Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update State: Escalated": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["multi-agent", "reviewer"]
+}

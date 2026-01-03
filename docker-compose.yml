@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # n8n workflow automation
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678}
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      - GENERIC_TIMEZONE=${TIMEZONE:-UTC}
+      - TZ=${TIMEZONE:-UTC}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows:ro
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Coder agent (on-demand, triggered by n8n)
+  coder-agent:
+    build:
+      context: ./agents/coder
+      dockerfile: Dockerfile
+    environment:
+      - GITHUB_TOKEN=${CODER_GITHUB_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GIT_USER_NAME=${CODER_GIT_NAME:-Coder Bot}
+      - GIT_USER_EMAIL=${CODER_GIT_EMAIL:-coder-bot@example.com}
+    volumes:
+      - coder_workspace:/workspace
+    networks:
+      - agent-network
+    # This container is run on-demand by n8n, not always running
+    profiles:
+      - agents
+
+  # Reviewer agent (on-demand, triggered by n8n)
+  reviewer-agent:
+    build:
+      context: ./agents/reviewer
+      dockerfile: Dockerfile
+    environment:
+      - GITHUB_TOKEN=${REVIEWER_GITHUB_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GIT_USER_NAME=${REVIEWER_GIT_NAME:-Reviewer Bot}
+      - GIT_USER_EMAIL=${REVIEWER_GIT_EMAIL:-reviewer-bot@example.com}
+    volumes:
+      - reviewer_workspace:/workspace
+    networks:
+      - agent-network
+    # This container is run on-demand by n8n, not always running
+    profiles:
+      - agents
+
+volumes:
+  n8n_data:
+    driver: local
+  coder_workspace:
+    driver: local
+  reviewer_workspace:
+    driver: local
+
+networks:
+  agent-network:
+    driver: bridge

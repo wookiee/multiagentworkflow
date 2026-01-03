@@ -1,0 +1,94 @@
+name: PR Review Comment Handler
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  handle-review:
+    runs-on: ubuntu-latest
+    # Trigger when reviewer bot submits a review
+    if: |
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.user.login == 'your-reviewer-bot')
+
+    steps:
+      - name: Determine review action
+        id: review-action
+        run: |
+          REVIEW_STATE="${{ github.event.review.state }}"
+          echo "Review state: $REVIEW_STATE"
+
+          if [ "$REVIEW_STATE" == "approved" ]; then
+            echo "action=approved" >> $GITHUB_OUTPUT
+          elif [ "$REVIEW_STATE" == "changes_requested" ]; then
+            echo "action=changes_requested" >> $GITHUB_OUTPUT
+          else
+            echo "action=commented" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger n8n for changes requested
+        if: steps.review-action.outputs.action == 'changes_requested'
+        env:
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+        run: |
+          curl -X POST "$N8N_WEBHOOK_URL/webhook/review-response" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "action": "changes_requested",
+              "pull_request": {
+                "number": ${{ github.event.pull_request.number }},
+                "html_url": "${{ github.event.pull_request.html_url }}",
+                "head": {
+                  "ref": "${{ github.event.pull_request.head.ref }}"
+                }
+              },
+              "review": {
+                "body": ${{ toJSON(github.event.review.body) }},
+                "user": {
+                  "login": "${{ github.event.review.user.login }}"
+                }
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}",
+                "clone_url": "${{ github.event.repository.clone_url }}"
+              }
+            }'
+
+      - name: Trigger n8n for approval
+        if: steps.review-action.outputs.action == 'approved'
+        env:
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+        run: |
+          curl -X POST "$N8N_WEBHOOK_URL/webhook/review-approved" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "action": "approved",
+              "pull_request": {
+                "number": ${{ github.event.pull_request.number }},
+                "html_url": "${{ github.event.pull_request.html_url }}"
+              },
+              "review": {
+                "user": {
+                  "login": "${{ github.event.review.user.login }}"
+                }
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}"
+              }
+            }'
+
+  handle-coder-push:
+    runs-on: ubuntu-latest
+    # When coder bot pushes new commits after review
+    if: |
+      github.event_name == 'pull_request_review_comment' &&
+      github.event.comment.user.login == 'your-coder-bot'
+
+    steps:
+      - name: Log coder response
+        run: |
+          echo "Coder bot responded to review comment"
+          echo "Comment: ${{ github.event.comment.body }}"

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up test environment
+        run: |
+          # Add your setup commands here
+          # Examples:
+          # - uses: actions/setup-node@v4
+          #   with:
+          #     node-version: '20'
+          # - uses: actions/setup-python@v5
+          #   with:
+          #     python-version: '3.12'
+          echo "Setup complete"
+
+      - name: Install dependencies
+        run: |
+          # Add your dependency installation commands here
+          # Examples:
+          # npm ci
+          # pip install -r requirements.txt
+          echo "Dependencies installed"
+
+      - name: Run tests
+        run: |
+          # Add your test commands here
+          # Examples:
+          # npm test
+          # pytest
+          # go test ./...
+          echo "Tests passed"
+
+      - name: Run linter
+        run: |
+          # Add your linting commands here
+          # Examples:
+          # npm run lint
+          # ruff check .
+          echo "Linting passed"

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd multi-agent Claude Code workflow system\n\nImplements an automated PR workflow with two Claude Code agents:\n- Coder agent: implements GitHub issues and creates PRs\n- Reviewer agent: reviews code and provides feedback\n\nComponents:\n- GitHub Actions workflows for event triggers\n- Dockerized agents with Claude Code CLI\n- n8n workflow templates for orchestration\n- Safeguards: 5-iteration limit + 24h timeout\nEOF\n\\)\")"
+    ]
+  }
+}

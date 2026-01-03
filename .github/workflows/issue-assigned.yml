@@ -1,0 +1,43 @@
+name: Issue Assigned to Coder
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  trigger-coder:
+    runs-on: ubuntu-latest
+    # Only trigger for the coder bot account
+    if: github.event.assignee.login == 'your-coder-bot'
+
+    steps:
+      - name: Trigger n8n webhook
+        env:
+          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+        run: |
+          curl -X POST "$N8N_WEBHOOK_URL/webhook/issue-assigned" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: issues" \
+            -d '{
+              "action": "${{ github.event.action }}",
+              "issue": {
+                "number": ${{ github.event.issue.number }},
+                "title": "${{ github.event.issue.title }}",
+                "body": ${{ toJSON(github.event.issue.body) }},
+                "html_url": "${{ github.event.issue.html_url }}",
+                "labels": ${{ toJSON(github.event.issue.labels) }}
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}",
+                "clone_url": "${{ github.event.repository.clone_url }}",
+                "default_branch": "${{ github.event.repository.default_branch }}"
+              },
+              "assignee": {
+                "login": "${{ github.event.assignee.login }}"
+              }
+            }'
+
+      - name: Log trigger
+        run: |
+          echo "Triggered Coder agent for issue #${{ github.event.issue.number }}"
+          echo "Issue: ${{ github.event.issue.title }}"

@@ -1,0 +1,145 @@
+{
+  "name": "Issue Assigned - Trigger Coder",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "issue-assigned",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Issue Assigned",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "upsert",
+        "table": "workflow_state",
+        "data": {
+          "values": [
+            {
+              "id": "={{ $json.issue.number }}",
+              "issue_number": "={{ $json.issue.number }}",
+              "issue_title": "={{ $json.issue.title }}",
+              "repository": "={{ $json.repository.full_name }}",
+              "status": "in_progress",
+              "iteration_count": 0,
+              "started_at": "={{ $now.toISO() }}",
+              "timeout_at": "={{ $now.plus({ hours: 24 }).toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "create-state",
+      "name": "Create Workflow State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [220, 0],
+      "notes": "Replace with your database node (Postgres, MySQL, SQLite, etc.)"
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e GITHUB_TOKEN=\"$CODER_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $json.repository.clone_url }}\" \\\n  -e ISSUE_NUMBER=\"{{ $json.issue.number }}\" \\\n  -e ISSUE_TITLE=\"{{ $json.issue.title }}\" \\\n  -e ISSUE_BODY=\"{{ $json.issue.body }}\" \\\n  -e DEFAULT_BRANCH=\"{{ $json.repository.default_branch }}\" \\\n  -v coder_workspace:/workspace \\\n  multiagentworkflow-coder-agent"
+      },
+      "id": "run-coder",
+      "name": "Run Coder Agent",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "update",
+        "table": "workflow_state",
+        "data": {
+          "values": [
+            {
+              "status": "pr_created",
+              "coder_completed_at": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "where": {
+          "values": [
+            {
+              "column": "issue_number",
+              "value": "={{ $('Webhook: Issue Assigned').item.json.issue.number }}"
+            }
+          ]
+        }
+      },
+      "id": "update-state",
+      "name": "Update State: PR Created",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, issue: $('Webhook: Issue Assigned').item.json.issue.number }) }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    }
+  ],
+  "connections": {
+    "Webhook: Issue Assigned": {
+      "main": [
+        [
+          {
+            "node": "Create Workflow State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Workflow State": {
+      "main": [
+        [
+          {
+            "node": "Run Coder Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Coder Agent": {
+      "main": [
+        [
+          {
+            "node": "Update State: PR Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update State: PR Created": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["multi-agent", "coder"]
+}
