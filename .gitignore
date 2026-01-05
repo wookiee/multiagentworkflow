@@ -3,10 +3,13 @@
 .env.local
 .env.*.local
 
+# Deployment credentials (contains secrets)
+DEPLOYMENT.md
+
 # Docker volumes (if stored locally)
 n8n_data/
-coder_workspace/
-reviewer_workspace/
+claudius_workspace/
+claudette_workspace/
 
 # Logs
 *.log
