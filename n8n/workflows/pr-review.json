@@ -64,13 +64,54 @@
     },
     {
       "parameters": {
-        "command": "docker run --rm \\\n  -e GITHUB_TOKEN=\"$REVIEWER_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: PR Opened').item.json.repository.clone_url }}\" \\\n  -e PR_NUMBER=\"{{ $('Webhook: PR Opened').item.json.pull_request.number }}\" \\\n  -e PR_TITLE=\"{{ $('Webhook: PR Opened').item.json.pull_request.title }}\" \\\n  -e PR_BODY=\"{{ $('Webhook: PR Opened').item.json.pull_request.body }}\" \\\n  -e PR_BRANCH=\"{{ $('Webhook: PR Opened').item.json.pull_request.head.ref }}\" \\\n  -e ITERATION_COUNT=\"{{ $('Get Workflow State').item.json.iteration_count + 1 }}\" \\\n  -e MAX_ITERATIONS=\"{{ $env.MAX_ITERATIONS || 5 }}\" \\\n  -v reviewer_workspace:/workspace \\\n  multiagentworkflow-reviewer-agent"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-author",
+              "leftValue": "={{ $('Webhook: PR Opened').item.json.pull_request.user.login }}",
+              "rightValue": "claudiusward",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
       },
-      "id": "run-reviewer",
-      "name": "Run Reviewer Agent",
+      "id": "select-reviewer",
+      "name": "Select Reviewer",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, -100],
+      "notes": "If Claudius created the PR, Claudette reviews (and vice versa)"
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e ROLE=\"reviewer\" \\\n  -e AGENT_NAME=\"Claudette\" \\\n  -e GITHUB_TOKEN=\"$CLAUDETTE_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: PR Opened').item.json.repository.clone_url }}\" \\\n  -e PR_NUMBER=\"{{ $('Webhook: PR Opened').item.json.pull_request.number }}\" \\\n  -e PR_TITLE=\"{{ $('Webhook: PR Opened').item.json.pull_request.title }}\" \\\n  -e PR_BODY=\"{{ $('Webhook: PR Opened').item.json.pull_request.body }}\" \\\n  -e PR_BRANCH=\"{{ $('Webhook: PR Opened').item.json.pull_request.head.ref }}\" \\\n  -e ITERATION_COUNT=\"{{ $('Get Workflow State').item.json.iteration_count + 1 }}\" \\\n  -e MAX_ITERATIONS=\"{{ $env.MAX_ITERATIONS || 5 }}\" \\\n  -v claudette_workspace:/workspace \\\n  multiagentworkflow-claudette"
+      },
+      "id": "run-claudette-reviewer",
+      "name": "Run Claudette (Reviewer)",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [660, -100]
+      "position": [880, -200],
+      "notes": "Claudette reviews Claudius's PRs"
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e ROLE=\"reviewer\" \\\n  -e AGENT_NAME=\"Claudius\" \\\n  -e GITHUB_TOKEN=\"$CLAUDIUS_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: PR Opened').item.json.repository.clone_url }}\" \\\n  -e PR_NUMBER=\"{{ $('Webhook: PR Opened').item.json.pull_request.number }}\" \\\n  -e PR_TITLE=\"{{ $('Webhook: PR Opened').item.json.pull_request.title }}\" \\\n  -e PR_BODY=\"{{ $('Webhook: PR Opened').item.json.pull_request.body }}\" \\\n  -e PR_BRANCH=\"{{ $('Webhook: PR Opened').item.json.pull_request.head.ref }}\" \\\n  -e ITERATION_COUNT=\"{{ $('Get Workflow State').item.json.iteration_count + 1 }}\" \\\n  -e MAX_ITERATIONS=\"{{ $env.MAX_ITERATIONS || 5 }}\" \\\n  -v claudius_workspace:/workspace \\\n  multiagentworkflow-claudius"
+      },
+      "id": "run-claudius-reviewer",
+      "name": "Run Claudius (Reviewer)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [880, 0],
+      "notes": "Claudius reviews Claudette's PRs"
     },
     {
       "parameters": {
@@ -98,7 +139,7 @@
       "name": "Update Iteration Count",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [880, -100]
+      "position": [1100, -100]
     },
     {
       "parameters": {
@@ -109,7 +150,7 @@
       "name": "Escalate to Human",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
-      "position": [660, 100],
+      "position": [660, 200],
       "notes": "Configure with your Slack webhook or replace with email/other notification"
     },
     {
@@ -138,7 +179,7 @@
       "name": "Update State: Escalated",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [880, 100]
+      "position": [880, 200]
     },
     {
       "parameters": {
@@ -149,7 +190,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1100, 0]
+      "position": [1320, 0]
     }
   ],
   "connections": {
@@ -179,7 +220,7 @@
       "main": [
         [
           {
-            "node": "Run Reviewer Agent",
+            "node": "Select Reviewer",
             "type": "main",
             "index": 0
           }
@@ -193,7 +234,36 @@
         ]
       ]
     },
-    "Run Reviewer Agent": {
+    "Select Reviewer": {
+      "main": [
+        [
+          {
+            "node": "Run Claudette (Reviewer)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Claudius (Reviewer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claudette (Reviewer)": {
+      "main": [
+        [
+          {
+            "node": "Update Iteration Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claudius (Reviewer)": {
       "main": [
         [
           {

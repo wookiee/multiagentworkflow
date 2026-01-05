@@ -28,36 +28,40 @@ services:
       timeout: 10s
       retries: 3
 
-  # Coder agent (on-demand, triggered by n8n)
-  coder-agent:
+  # Claudius agent (on-demand, triggered by n8n)
+  # Can assume either coder or reviewer role via ROLE env var
+  claudius:
     build:
-      context: ./agents/coder
+      context: ./agents/claudius
       dockerfile: Dockerfile
     environment:
-      - GITHUB_TOKEN=${CODER_GITHUB_TOKEN}
+      - AGENT_NAME=Claudius
+      - GITHUB_TOKEN=${CLAUDIUS_GITHUB_TOKEN}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GIT_USER_NAME=${CODER_GIT_NAME:-Coder Bot}
-      - GIT_USER_EMAIL=${CODER_GIT_EMAIL:-coder-bot@example.com}
+      - GIT_USER_NAME=${CLAUDIUS_GIT_NAME:-Claudius Ward}
+      - GIT_USER_EMAIL=${CLAUDIUS_GIT_EMAIL:-claudiusward@users.noreply.github.com}
     volumes:
-      - coder_workspace:/workspace
+      - claudius_workspace:/workspace
     networks:
       - agent-network
     # This container is run on-demand by n8n, not always running
     profiles:
       - agents
 
-  # Reviewer agent (on-demand, triggered by n8n)
-  reviewer-agent:
+  # Claudette agent (on-demand, triggered by n8n)
+  # Can assume either coder or reviewer role via ROLE env var
+  claudette:
     build:
-      context: ./agents/reviewer
+      context: ./agents/claudette
       dockerfile: Dockerfile
     environment:
-      - GITHUB_TOKEN=${REVIEWER_GITHUB_TOKEN}
+      - AGENT_NAME=Claudette
+      - GITHUB_TOKEN=${CLAUDETTE_GITHUB_TOKEN}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GIT_USER_NAME=${REVIEWER_GIT_NAME:-Reviewer Bot}
-      - GIT_USER_EMAIL=${REVIEWER_GIT_EMAIL:-reviewer-bot@example.com}
+      - GIT_USER_NAME=${CLAUDETTE_GIT_NAME:-Claudette Ward}
+      - GIT_USER_EMAIL=${CLAUDETTE_GIT_EMAIL:-claudetteward@users.noreply.github.com}
     volumes:
-      - reviewer_workspace:/workspace
+      - claudette_workspace:/workspace
     networks:
       - agent-network
     # This container is run on-demand by n8n, not always running
@@ -67,9 +71,9 @@ services:
 volumes:
   n8n_data:
     driver: local
-  coder_workspace:
+  claudius_workspace:
     driver: local
-  reviewer_workspace:
+  claudette_workspace:
     driver: local
 
 networks:

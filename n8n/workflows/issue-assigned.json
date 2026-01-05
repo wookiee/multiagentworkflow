@@ -1,5 +1,5 @@
 {
-  "name": "Issue Assigned - Trigger Coder",
+  "name": "Issue Assigned - Trigger Agent",
   "nodes": [
     {
       "parameters": {
@@ -26,6 +26,7 @@
               "issue_number": "={{ $json.issue.number }}",
               "issue_title": "={{ $json.issue.title }}",
               "repository": "={{ $json.repository.full_name }}",
+              "assigned_to": "={{ $json.assignee.login }}",
               "status": "in_progress",
               "iteration_count": 0,
               "started_at": "={{ $now.toISO() }}",
@@ -43,13 +44,52 @@
     },
     {
       "parameters": {
-        "command": "docker run --rm \\\n  -e GITHUB_TOKEN=\"$CODER_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $json.repository.clone_url }}\" \\\n  -e ISSUE_NUMBER=\"{{ $json.issue.number }}\" \\\n  -e ISSUE_TITLE=\"{{ $json.issue.title }}\" \\\n  -e ISSUE_BODY=\"{{ $json.issue.body }}\" \\\n  -e DEFAULT_BRANCH=\"{{ $json.repository.default_branch }}\" \\\n  -v coder_workspace:/workspace \\\n  multiagentworkflow-coder-agent"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-assignee",
+              "leftValue": "={{ $('Webhook: Issue Assigned').item.json.assignee.login }}",
+              "rightValue": "claudiusward",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
       },
-      "id": "run-coder",
-      "name": "Run Coder Agent",
+      "id": "select-agent",
+      "name": "Select Agent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "notes": "Route to Claudius or Claudette based on assignee"
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e ROLE=\"coder\" \\\n  -e AGENT_NAME=\"Claudius\" \\\n  -e GITHUB_TOKEN=\"$CLAUDIUS_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: Issue Assigned').item.json.repository.clone_url }}\" \\\n  -e ISSUE_NUMBER=\"{{ $('Webhook: Issue Assigned').item.json.issue.number }}\" \\\n  -e ISSUE_TITLE=\"{{ $('Webhook: Issue Assigned').item.json.issue.title }}\" \\\n  -e ISSUE_BODY=\"{{ $('Webhook: Issue Assigned').item.json.issue.body }}\" \\\n  -e DEFAULT_BRANCH=\"{{ $('Webhook: Issue Assigned').item.json.repository.default_branch }}\" \\\n  -v claudius_workspace:/workspace \\\n  multiagentworkflow-claudius"
+      },
+      "id": "run-claudius",
+      "name": "Run Claudius (Coder)",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [440, 0]
+      "position": [660, -100]
+    },
+    {
+      "parameters": {
+        "command": "docker run --rm \\\n  -e ROLE=\"coder\" \\\n  -e AGENT_NAME=\"Claudette\" \\\n  -e GITHUB_TOKEN=\"$CLAUDETTE_GITHUB_TOKEN\" \\\n  -e ANTHROPIC_API_KEY=\"$ANTHROPIC_API_KEY\" \\\n  -e REPO_URL=\"{{ $('Webhook: Issue Assigned').item.json.repository.clone_url }}\" \\\n  -e ISSUE_NUMBER=\"{{ $('Webhook: Issue Assigned').item.json.issue.number }}\" \\\n  -e ISSUE_TITLE=\"{{ $('Webhook: Issue Assigned').item.json.issue.title }}\" \\\n  -e ISSUE_BODY=\"{{ $('Webhook: Issue Assigned').item.json.issue.body }}\" \\\n  -e DEFAULT_BRANCH=\"{{ $('Webhook: Issue Assigned').item.json.repository.default_branch }}\" \\\n  -v claudette_workspace:/workspace \\\n  multiagentworkflow-claudette"
+      },
+      "id": "run-claudette",
+      "name": "Run Claudette (Coder)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [660, 100]
     },
     {
       "parameters": {
@@ -77,18 +117,18 @@
       "name": "Update State: PR Created",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [660, 0]
+      "position": [880, 0]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, issue: $('Webhook: Issue Assigned').item.json.issue.number }) }}"
+        "responseBody": "={{ JSON.stringify({ success: true, issue: $('Webhook: Issue Assigned').item.json.issue.number, agent: $('Webhook: Issue Assigned').item.json.assignee.login }) }}"
       },
       "id": "respond",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [880, 0]
+      "position": [1100, 0]
     }
   ],
   "connections": {
@@ -107,14 +147,43 @@
       "main": [
         [
           {
-            "node": "Run Coder Agent",
+            "node": "Select Agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Run Coder Agent": {
+    "Select Agent": {
+      "main": [
+        [
+          {
+            "node": "Run Claudius (Coder)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Claudette (Coder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claudius (Coder)": {
+      "main": [
+        [
+          {
+            "node": "Update State: PR Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claudette (Coder)": {
       "main": [
         [
           {

@@ -3,7 +3,10 @@
     "allow": [
       "Bash(find:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd multi-agent Claude Code workflow system\n\nImplements an automated PR workflow with two Claude Code agents:\n- Coder agent: implements GitHub issues and creates PRs\n- Reviewer agent: reviews code and provides feedback\n\nComponents:\n- GitHub Actions workflows for event triggers\n- Dockerized agents with Claude Code CLI\n- n8n workflow templates for orchestration\n- Safeguards: 5-iteration limit + 24h timeout\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd multi-agent Claude Code workflow system\n\nImplements an automated PR workflow with two Claude Code agents:\n- Coder agent: implements GitHub issues and creates PRs\n- Reviewer agent: reviews code and provides feedback\n\nComponents:\n- GitHub Actions workflows for event triggers\n- Dockerized agents with Claude Code CLI\n- n8n workflow templates for orchestration\n- Safeguards: 5-iteration limit + 24h timeout\nEOF\n\\)\")",
+      "Bash(gh repo create:*)",
+      "Bash(ssh mikey@bacchubuntu \"echo ''=== System Info ==='' && uname -a && echo && echo ''=== OS Release ==='' && cat /etc/os-release && echo && echo ''=== Docker Status ==='' && \\(docker --version 2>/dev/null || echo ''Docker not installed''\\) && \\(docker compose version 2>/dev/null || docker-compose --version 2>/dev/null || echo ''Docker Compose not installed''\\) && echo && echo ''=== Running Containers ==='' && \\(docker ps 2>/dev/null || echo ''Cannot list containers''\\) && echo && echo ''=== Disk Space ==='' && df -h / && echo && echo ''=== Memory ==='' && free -h && echo && echo ''=== CPU ==='' && nproc\")",
+      "Bash(ssh mikey@bacchubuntu \"echo ''=== Network Interfaces ==='' && ip addr show | grep -E ''^[0-9]+:|inet '' && echo && echo ''=== Tailscale Status ==='' && \\(tailscale status 2>/dev/null || echo ''Tailscale not running or not installed''\\) && echo && echo ''=== Listening Ports ==='' && sudo ss -tlnp 2>/dev/null || ss -tln && echo && echo ''=== UFW Status ==='' && \\(sudo ufw status 2>/dev/null || echo ''UFW not available or no sudo''\\) && echo && echo ''=== Existing Services ==='' && systemctl list-units --type=service --state=running --no-pager | head -30\")"
     ]
   }
 }

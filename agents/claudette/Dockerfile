@@ -1,4 +1,4 @@
-# Coder Agent Dockerfile
+# Software Engineer Agent Dockerfile
 FROM node:20-slim
 
 # Install system dependencies
@@ -29,8 +29,8 @@ COPY entrypoint.sh /agent/entrypoint.sh
 RUN chmod +x /agent/entrypoint.sh
 
 # Set up git config (will be overridden by environment variables)
-RUN git config --global user.name "Coder Bot" && \
-    git config --global user.email "coder-bot@example.com" && \
+RUN git config --global user.name "Claudette Ward" && \
+    git config --global user.email "claudetteward@users.noreply.github.com" && \
     git config --global init.defaultBranch main
 
 ENTRYPOINT ["/agent/entrypoint.sh"]

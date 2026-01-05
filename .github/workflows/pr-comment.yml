@@ -9,10 +9,10 @@ on:
 jobs:
   handle-review:
     runs-on: ubuntu-latest
-    # Trigger when reviewer bot submits a review
+    # Trigger when either agent submits a review
     if: |
       (github.event_name == 'pull_request_review' &&
-       github.event.review.user.login == 'your-reviewer-bot')
+       (github.event.review.user.login == 'claudiusward' || github.event.review.user.login == 'claudetteward'))
 
     steps:
       - name: Determine review action
@@ -80,15 +80,16 @@ jobs:
               }
             }'
 
-  handle-coder-push:
+  handle-agent-comment:
     runs-on: ubuntu-latest
-    # When coder bot pushes new commits after review
+    # When an agent responds to a review comment
     if: |
       github.event_name == 'pull_request_review_comment' &&
-      github.event.comment.user.login == 'your-coder-bot'
+      (github.event.comment.user.login == 'claudiusward' || github.event.comment.user.login == 'claudetteward')
 
     steps:
-      - name: Log coder response
+      - name: Log agent response
         run: |
-          echo "Coder bot responded to review comment"
+          echo "Agent responded to review comment"
+          echo "Agent: ${{ github.event.comment.user.login }}"
           echo "Comment: ${{ github.event.comment.body }}"

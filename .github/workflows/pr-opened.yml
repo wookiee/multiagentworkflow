@@ -7,8 +7,8 @@ on:
 jobs:
   wait-for-ci:
     runs-on: ubuntu-latest
-    # Only trigger for PRs created by the coder bot
-    if: github.event.pull_request.user.login == 'your-coder-bot'
+    # Trigger for PRs created by either agent
+    if: github.event.pull_request.user.login == 'claudiusward' || github.event.pull_request.user.login == 'claudetteward'
 
     steps:
       - name: Wait for CI to complete
@@ -31,7 +31,7 @@ jobs:
   trigger-reviewer:
     runs-on: ubuntu-latest
     needs: wait-for-ci
-    if: github.event.pull_request.user.login == 'your-coder-bot'
+    if: github.event.pull_request.user.login == 'claudiusward' || github.event.pull_request.user.login == 'claudetteward'
 
     steps:
       - name: Trigger n8n webhook
@@ -69,3 +69,4 @@ jobs:
         run: |
           echo "Triggered Reviewer agent for PR #${{ github.event.pull_request.number }}"
           echo "PR: ${{ github.event.pull_request.title }}"
+          echo "Author: ${{ github.event.pull_request.user.login }}"

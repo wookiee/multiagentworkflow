@@ -1,14 +1,14 @@
-name: Issue Assigned to Coder
+name: Issue Assigned to Agent
 
 on:
   issues:
     types: [assigned]
 
 jobs:
-  trigger-coder:
+  trigger-agent:
     runs-on: ubuntu-latest
-    # Only trigger for the coder bot account
-    if: github.event.assignee.login == 'your-coder-bot'
+    # Trigger when issue is assigned to either agent
+    if: github.event.assignee.login == 'claudiusward' || github.event.assignee.login == 'claudetteward'
 
     steps:
       - name: Trigger n8n webhook
@@ -39,5 +39,6 @@ jobs:
 
       - name: Log trigger
         run: |
-          echo "Triggered Coder agent for issue #${{ github.event.issue.number }}"
+          echo "Triggered agent for issue #${{ github.event.issue.number }}"
           echo "Issue: ${{ github.event.issue.title }}"
+          echo "Assigned to: ${{ github.event.assignee.login }}"
